@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE struts PUBLIC
+    "-//Apache Software Foundation//DTD Struts Configuration 2.5//EN"
+    "http://struts.apache.org/dtds/struts-2.5.dtd">
+ 
+ 
+<!--下面使用的各项属性值的所有可能取值都可在struts-default.xml中找到.  -->
+<!-- 
+	action: 一个struts请求就是一个action
+	Action: 能够处理struts请求的类
+
+ -->
+ 
+<struts>
+
+	
+
+ 	<!-- struts使用包来组织模块, 一个包中定义一系列拦截器,动作, 使用extends可以继承一个包 ,通常情况下继承struts-default
+ 		namespace属性是可选的, 默认为 / ,加上某个命名空间之后, 该package中定义的所有路径就需要加上对应的namespace路径.
+ 	-->
+ 	<!-- 设置响应后缀 -->
+ 	<constant name="struts.action.extension" value="action,,"></constant>
+ 	<!-- 允许动态方法调用 -->
+ 	<constant name="struts.enable.DynamicMethodInvocation" value="true"></constant>
+	<!-- 允许静态方法调用 -->
+	<constant name="struts.ognl.allowStaticMethodAccess" value="true"></constant>
+	
+	<package name="helloworld" extends="struts-default">
+		<!--name:对应一个struts请求的名字(或者对应servletPath, 但去除了 / 和扩展名)-->
+		<action name="product-input">
+			<result>WEB-INF/pages/input.jsp</result>
+		</action>
+		
+		<!-- 
+			class属性: 默认情况下为com.opensymphony.xwork2.ActionSupport,
+			method属性: 默认值为execute, 默认返回值SUCCESS(String类型)
+		 -->
+		<action name="product-save" class="jayshawn.struts.helloworld.Product" method="save">
+			<!-- 
+			name属性: 默认值为success, 一个result对应一个返回结果, 就是说在method中可以定义多个返回结果, 每个返回结果可以配置一个对应的result
+			type属性:	默认为dispatcher(转发到结果)
+			 -->
+			<result name="result">WEB-INF/pages/details.jsp</result>
+		</action>
+		
+		<action name="testValidation" class="jayshawn.struts.validation.ValidationAction" >
+			<result>/success.jsp</result>
+			<result name="input">/age.jsp</result>
+		</action>
+		
+	</package>
+	
+	<package name="TestAction" extends="struts-default">
+		<action name="TestActionContext" class="jayshawn.struts.action.TestActionContext">
+			<result>/WEB-INF/pages/test-actionContext.jsp</result>
+		</action>
+		<action name="TestAwareAction" class="jayshawn.struts.action.TestAwareAction">
+			<result>/WEB-INF/pages/test-aware.jsp</result>
+		</action>
+	</package>
+	
+	<package  name="app1" namespace="/app1" extends="struts-default" >
+		<!-- 开启正则表达式匹配 -->
+		<global-allowed-methods>regex:.*</global-allowed-methods>
+		<action name="User-*" class="jayshawn.struts.action.App1" method="{1}">
+			<result name="success-{1}">/app1/success.jsp</result>
+		</action>
+	</package>
+	
+	<package name="valuestack" namespace="/valuestack" extends="struts-default">
+		<action name="product-save2" class="jayshawn.struts.valuestack.Product" method="save">
+			<result>/valuestack/details.jsp</result>
+		</action>
+	</package>
+	
+	<package name="crud" namespace="/crud" extends="struts-default">
+		<interceptors>
+	    <interceptor-stack name="crud">
+	        <interceptor-ref name="paramsPrepareParamsStack">
+	            <param name="alwaysInvokePrepare">false</param>
+	        </interceptor-ref>
+	    </interceptor-stack>
+		</interceptors>
+		<default-interceptor-ref name="crud"/>
+		<global-allowed-methods>regex:.*</global-allowed-methods>
+		<action name="crud-*" class="jayshawn.struts.crud.EmployeeAction" method="{1}">
+			<result name="{1}" type="redirectAction">crud-list</result>
+		</action>
+		<action name="crud-edit" class="jayshawn.struts.crud.EmployeeAction" method="edit">
+			<result name="edit" >/crud/edit.jsp</result>
+		</action>
+		<action name="crud-list" class="jayshawn.struts.crud.EmployeeAction" method="list">
+			<result name="list" >/crud/list.jsp</result>
+		</action>
+		
+	</package>
+	
+	<package name="load" namespace="/load" extends="struts-default">
+		<action name="upload" class="jayshawn.struts.load.UploadAction">
+			<result>/success.jsp</result>
+		</action>
+		<action name="download" class="jayshawn.struts.load.DownloadAction">
+			<result type="stream">
+				<param name="contentType">application/vnd.openxmlformats-officedocument.wordprocessingml.document</param>
+			</result>
+		</action>
+	</package>
+	
+	<package name="resubmit" extends="struts-default">
+		<action name="resubmit" class="jayshawn.struts.resubmit.ResubmitAction">
+			<interceptor-ref name="token"></interceptor-ref>
+			<interceptor-ref name="defaultStack"></interceptor-ref>
+			<result>/success.jsp</result>
+			<result name="invalid.token">token-error.jsp</result>
+		</action>
+	</package>
+	
+</struts>

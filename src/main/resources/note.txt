@@ -1,0 +1,399 @@
+Action:
+action: 应用程序可以完成的每一个操作. 例如: 显示一个登陆表单; 把产品信息保存起来
+Action类: 普通的 Java 类, 可以有属性和方法, 同时必须遵守下面这些规则: 
+	属性的名字必须遵守与 JavaBeans 属性名相同的命名规则. 属性的类型可以是任意类型. 从字符串到非字符串(基本数据库类型)之间的数据转换可以自动发生
+	必须有一个不带参的构造器
+	至少有一个供 struts 在执行这个 action 时调用的方法
+	同一个 Action 类可以包含多个 action 方法. 
+	Struts2 会为每一个 HTTP 请求创建一个新的 Action 实例
+
+1. 关于值栈:
+1). helloWorld 时, ${productName} 读取 productName 值, 实际上该属性并不在 request 等域对象中, 而是从值栈中获取的. 
+2). ValueStack: 
+I.  可以从 ActionContext 中获取值栈对象
+II. 值栈分为两个逻辑部分
+	> Map 栈: 实际上是 OgnlContext 类型, 是个 Map, 也是对 ActionContext 的一个引用. 里边保存着各种 Map:
+	         requestMap, sessionMap, applicationMap, parametersMap, attr
+	> 对象栈: 实际上是 CompoundRoot 类型, 是一个使用 ArrayList 定义的栈. 里边保存各种和当前 Action 实例相关的对象.
+	                   是一个数据结构意义的栈.
+ 2. Struts2 利用 s:property 标签和 OGNL 表达式来读取值栈中的属性值
+ 1). 值栈中的属性值:
+ 	> 对于对象栈: 对象栈中某一个对象的属性值
+ 	> Map 栈: request, session, application 的一个属性值 或 一个请求参数的值. 
+ 2). 读取对象栈中对象的属性:
+ 	> 若想访问 Object Stack 里的某个对象的属性. 可以使用以下几种形式之一: 
+	  object.propertyName ; object['propertyName'] ; object["propertyName"]	
+	> ObjectStack 里的对象可以通过一个从零开始的下标来引用. ObjectStack 里的栈顶对象可以用 [0] 来引用, 
+	     它下面的那个对象可以用 [1] 引用. 
+	  [0].message   
+	> [n] 的含义是从第 n 个开始搜索, 而不是只搜索第 n 个对象
+	> 若从栈顶对象开始搜索, 则可以省略下标部分: message 
+	> 结合 s:property 标签: <s:property value="[0].message" />  <s:property value="message" />
+ 3). 默认情况下, Action 对象会被 Struts2 自动的放到值栈的栈顶. 
+ 4). 取 Context Map 里的对象的属性:
+	 若想访问 ContextMap 里的某个对象的属性, 可以使用以下几种形式之一: 
+		返回 session 中的 code 属性: #session.code
+		返回 request 中的 customer 属性的 name 属性值: #request.customer.name
+		返回域对象(按 request, session, application 的顺序)的 lastAccessDate 属性: #attr.lastAccessDate
+5). 调用字段和方法
+	可以利用 OGNL 调用
+		任何一个 Java 类里的静态字段或方法.
+		被压入到 ValueStack 栈的对象上的公共字段和方法. 
+	默认情况下, Struts2 不允许调用任意 Java 类静态方法,  需要重新设置 struts.ognl.allowStaticMethodAccess 标记变量的值为 true. 
+	调用静态字段或方法需要使用如下所示的语法:
+		@fullyQualifiedClassName@fieldName: @java.util.Calendar@DECEMBER
+		@fullyQualifiedClassName@methodName(argumentList): @app4.Util@now()
+	调用一个实例字段或方法的语法, 其中 object 是 Object Stack 栈里的某个对象的引用:
+		object.fieldName: [0].datePattern
+		object.methodName(argumentList): [0].repeat(3, “Hello”);
+	
+
+注意:在jsp页面导入s标签：<%@ taglib uri="/struts-tags" prefix="s" %>
+注意:<s:debug></s:debug> 可以在页面显示valuestack的具体内容
+注意:"%{}"中的内容会强制进行OGNL解析
+
+struts表单标签:
+	1.会自动进行回显:从值栈栈顶获取匹配的属性值填到表单对应的value中.在做修改时可以利用这个特性, 比如一个用户需要
+		修改自己的信息, 在进入修改页面之前, 可以在Action方法中把用户对象push到值栈中,然后进入修改页面时, struts
+		框架会自动从值栈中获取对应属性填到对应的表单域中.
+	2.会自动生成table进行排版
+	
+主题: 为了让所有的 UI 标签能够产生同样的视觉效果而归集到一起的一组模板. 即风格相近的模板被打包为一个主题
+	simple: 把 UI 标签翻译成最简单的 HTML 对应元素, 而且会忽视行标属性
+	xhtml: xhtml 是默认的主题. 这个主题的模板通过使用一个布局表格提供了一种自动化的排版机制. 
+	css_xhtml: 这个主题里的模板与 xhtml 主题里的模板很相似, 但它们将使用 css 来进行布局和排版
+	ajax: 这个主题里的模板以 xhtml 主题里的模板为基础, 但增加了一些 Ajax 功能. 
+修改主题:
+	通过 UI 标签的 theme 属性
+	在一个表单里, 若没有给出某个 UI 标签的 theme 属性, 它将使用这个表单的主题
+	在 page, request, session 或 application 中添加一个 theme 属性
+	修改 struts.properties 文件中的 struts.ui.theme 属性. 
+	
+Params 拦截器:
+Parameters 拦截器将把表单字段映射到 ValueStack 栈的栈顶对象的各个属性中. 如果某个字段在模型里没有匹配的属性, Param 拦截器将尝试 ValueStack 栈中的下一个对象
+
+把 Action 和 Model 隔开:
+在使用 Struts 作为前端的企业级应用程序时把 Action 和 Model 清晰地隔离开是有必要的: 有些 Action 类不代表任何Model 对象, 它们的功能仅限于提供显示服务
+ModelDriven 拦截器就是来干这个事情的,首先需要对应的Action实现ModelDriven接口:
+	当用户触发 add 请求时, ModelDriven 拦截器将调用Action对象的 getModel() 方法, 并把返回的模型(Employee实例)压入到 ValueStack 栈. 
+	接下来 Parameters 拦截器将把表单字段映射到 ValueStack 栈的栈顶对象的各个属性中. 因为此时 ValueStack 栈的栈顶元素是刚被压入的模型(Employee)对象, 所以该模型将被填充. 如果某个字段在模型里没有匹配的属性, Param 拦截器将尝试 ValueStack 栈中的下一个对象
+	
+使用 paramsPrepareParamsStack 拦截器栈:
+	为什么要使用它?
+	Struts 2.0的设计上要求 modelDriven 在 params 之前调用，而业务中prepare要负责准备model，准备model又需要参数，这就需要在 prepare之前运行params拦截器设置相关参数，这个也就是创建paramsPrepareParamsStack的原因。
+	paramsPrepareParamsStack 从字面上理解来说， 这个stack的拦截器调用的顺序为：首先 params，然后 prepare，接下来 modelDriven，最后再 params
+流程如下：
+	1. params拦截器首先给action中的相关参数赋值，如id
+	2. prepare拦截器执行prepare方法，prepare方法中会根据参数，如id，去调用业务逻辑，设置model对象
+	3. modelDriven拦截器将model对象压入value stack，这里的model对象就是在prepare中创建的
+	4. params拦截器再将参数赋值给model对象
+	5. action的业务逻辑执行
+
+Preparable 拦截器
+	Struts 2.0 中的 modelDriven 拦截器负责把 Action 类以外的一个对象压入到值栈栈顶
+	而 prepare 拦截器负责准备为 getModel() 方法准备 model
+PrepareInterceptor拦截器用方法
+	若 Action 实现 Preparable 接口，则 Action 方法需实现 prepare() 方法
+	PrepareInterceptor 拦截器将调用 prepare() 方法，prepareActionMethodName()方法 或 prepareDoActionMethodName ()方法 
+	PrepareInterceptor 拦截器根据 firstCallPrepareDo  属性决定获取 prepareActionMethodName 、prepareDoActionMethodName的顺序。默认情况下先获取 prepareActionMethodName (), 如果没有该方法，就寻找prepareDoActionMethodName()。如果找到对应的方法就调用该方法
+	PrepareInterceptor 拦截器会根据 alwaysInvokePrepare 属性决定是否执行prepare()方法
+	
+2. 使用 paramsPrepareParamsStack 拦截器栈后的运行流程
+1). paramsPrepareParamsStack 和 defaultStack 一样都是拦截器栈. 而 struts-default 包默认使用的是
+defaultStack
+2). 可以在 Struts 配置文件中通过以下方式修改使用的默认的拦截器栈
+<default-interceptor-ref name="paramsPrepareParamsStack"></default-interceptor-ref>
+3). paramsPrepareParamsStack 拦截器在于
+params -> modelDriven -> params
+所以可以先把请求参数赋给 Action 对应的属性, 再根据赋给 Action 的那个属性值决定压到值栈栈顶的对象, 最后再为栈顶对象的属性赋值.
+对于 edit 操作而言:
+I.   先为 EmployeeAction 的 employeeId 赋值
+II.  根据 employeeId 从数据库中加载对应的对象, 并放入到值栈的栈顶
+III. 再为栈顶对象的 employeeId 赋值(实际上此时 employeeId 属性值已经存在)
+IV.  把栈顶对象的属性回显在表单中.
+4). 关于回显: Struts2 表单标签会从值栈中获取对应的属性值进行回显. 
+5). 存在的问题: 
+getModel 方法
+public Employee getModel() {
+	if(employeeId == null)
+		employee = new Employee();
+	else
+		employee = dao.get(employeeId);
+	
+	return employee;
+}
+I.   在执行删除的时候, employeeId 不为 null, 但 getModel 方法却从数据库加载了一个对象. 不该加载!
+II.  指向查询全部信息时, 也 new Employee() 对象. 浪费!
+6). 解决方案: 使用 PrepareInterceptor 和 Preparable 接口. 
+7). 关于 PrepareInterceptor
+[分析后得到的结论]
+若 Action 实现了 Preparable 接口, 则 Struts 将尝试执行 prepare[ActionMethodName] 方法,
+若 prepare[ActionMethodName] 不存在, 则将尝试执行 prepareDo[ActionMethodName] 方法.
+若都不存在, 就都不执行.
+若 PrepareInterceptor  的 alwaysInvokePrepare 属性为 false, 
+则 Struts2 将不会调用实现了 Preparable 接口的  Action 的 prepare() 方法
+[能解决 5) 的问题的方案]
+可以为每一个 ActionMethod 准备 prepare[ActionMethdName] 方法, 而抛弃掉原来的 prepare() 方法
+将 PrepareInterceptor  的 alwaysInvokePrepare 属性置为 false, 以避免 Struts2 框架再调用 prepare() 方法.
+如何在配置文件中为拦截器栈的属性赋值: 参看 /struts-2.3.15.3/docs/WW/docs/interceptors.html
+<interceptors>
+    <interceptor-stack name="parentStack">
+        <interceptor-ref name="defaultStack">
+            <param name="params.excludeParams">token</param>
+        </interceptor-ref>
+    </interceptor-stack>
+</interceptors>
+<default-interceptor-ref name="parentStack"/>
+
+
+类型转换:
+从一个 HTML 表单到一个 Action 对象, 类型转换是从字符串到非字符串. 
+HTTP 没有 “类型” 的概念. 每一项表单输入只可能是一个字符串或一个字符串数组. 在服务器端, 必须把 String 转换为特定的数据类型
+在 struts2 中, 把请求参数映射到 action  属性的工作由 Parameters 拦截器负责, 它是默认的 defaultStack 拦截器中的一员. Parameters 拦截器可以自动完成字符串和基本数据类型之间转换. 
+类型转换错误:
+如果类型转换失败:
+若 Action 类没有实现 ValidationAware 接口： Struts 在遇到类型转换错误时仍会继续调用其 Action 方法, 就好像什么都没发生一样.
+若 Action 类实现 ValidationAware 接口：Struts 在遇到类型转换错误时将不会继续调用其 Action 方法:  Struts 将检查相关 action 元素的声明是否包含着一个 name=input 的 result.  如果有, Struts 将把控制权转交给那个 result  元素; 若没有 input 结果, Struts 将抛出一个异常
+类型转换错误消息的定制:
+作为默认的 default 拦截器的一员, ConversionError 拦截器负责添加与类型转换有关的出错消息(前提: Action 类必须实现了 ValidationAware 接口)和保存各请求参数的原始值.   
+显示错误消息: 如果是 simple 主题, 可以通过 <s:fielderror fieldName=“filedname”></s:fielderror> 标签显示错误消息
+定制类型转换器:
+自定义类型转换器必须实现 ongl.TypeConverter 接口或对这个接口的某种具体实现做扩展,通常情况下是扩展 StrutsTypeConverter 类.
+配置自定义的类型转换器:
+在应用程序里使用一个自定义的类型转换器之前, 必须先对它进行配置. 这种配置既可以基于字段, 也可以基于类型
+基于字段配置: 可以为某个 Model（该 Model 类也可能是 Action） 的各个属性分别配置一个自定义的转换器. 
+1. 创建一个属性文件: ModelClassName-conversion.properties, 该文件需和相对应的 Model 类放在同一个目录下
+2. 编辑属性文件: 
+	field1 = customConvert1
+	field2 = customConvert2
+基于类型配置: 
+在 WEB-INF/classes/ 目录下创建 xwork-conversion.properties 文件. 
+在 xwork-conversion.properties 文件里把每一个需要进行类型转换的类与一个类型转换器关联起来:
+	fullyQualifiedClassName = CustomConvert
+
+类型转换与复杂属性配合使用:
+	form 标签的 name 属性可以被映射到一个属性的属性. 
+
+配置国际化资源文件:
+Action 范围资源文件：在Action类文件所在的路径建立名为ActionName_language_country.properties 的文件
+包范围资源文件：在包的根路径下建立文件名为package_language_country.properties 的属性文件，一旦建立，处于该包下的所有 Action 都可以访问该资源文件。注意：包范围资源文件的 baseName 就是package，不是Action所在的包名。
+全局资源文件
+	命名方式: basename_language_country.properties
+	struts.xml
+		<constant name="struts.custom.i18n.resources" value="baseName"/>
+	struts.properties
+		struts.custom.i18n.resources=baseName
+临时指定资源文件：<s:i18n.../> 标签的 name 属性指定临时的国际化资源文件
+ 
+访问国际化消息:
+JSP 页面访问国际化消息：
+	不带占位符：
+		<s:text name="key"/>
+		表单元素的 label 属性：可替换为 key 或使用 getText() 方法，并对其进行强制 OGNL 解析
+	带占位符：
+		在 <s:text.../> 标签中使用多个 <s:param.../> 标签来填充消息中的占位符。
+		Struts2 直接在国际化消息资源文件中通过 “${}” 使用表达式，该表达式将从值栈中获取对应的属性值
+Action 访问国际化消息：
+	若 Action 类继承了 ActionSupport ，则可调用 TextProvider 接口的 getText 方法。
+	
+利用超链接实现动态加载国际化资源文件:
+	Struts2 使用 i18n 拦截器 处理国际化，并且将其注册在默认的拦截器中
+	i18n拦截器在执行Action方法前，自动查找请求中一个名为request_locale 的参数。如果该参数存在，拦截器就将其作为参数，转换成Locale对象，并将其设为用户默认的Locale(代表国家/语言环境)。并把其设置为 session 的 WW_TRANS_I18N_LOCALE 属性
+	若 request 没有名为request_locale 的参数，则 i18n 拦截器会从 Session 中获取 WW_TRANS_I18N_LOCALE 的属性值，若该值不为空，则将该属性值设置为浏览者的默认Locale 
+	若 session 中的 WW_TRANS_I18N_LOCALE 的属性值为空，则从 ActionContext 中获取 Locale 对象。
+
+Struts2 运行流程分析:
+	1. 请求发送给 StrutsPrepareAndExecuteFilter
+	2. StrutsPrepareAndExecuteFilter 询问 ActionMapper： 该请求是否是一个 Struts2 请求（即是否返回一个非空的 ActionMapping 对象）
+	3. 若 ActionMapper 认为该请求是一个 Struts2 请求，则 StrutsPrepareAndExecuteFilter 把请求的处理交给 ActionProxy
+	4. ActionProxy 通过 Configuration Manager 询问框架的配置文件，确定需要调用的 Action 类及 Action 方法
+	5. ActionProxy 创建一个 ActionInvocation 的实例，并进行初始化
+	6. ActionInvocation 实例在调用Action的过程前后，涉及到相关拦截器（Intercepter）的调用。
+	7. Action 执行完毕，ActionInvocation 负责根据 struts.xml 中的配置找到对应的返回结果。调用结果的 execute 方法，渲染结果。在渲染的过程中可以使用Struts2 框架中的标签。
+	8. 执行各个拦截器 invocation.invoke() 之后的代码
+	9. 把结果发送到客户端
+
+Struts2 的输入验证
+	基于 XWork Validation Framework 的声明式验证：Struts2 提供了一些基于 XWork Validation Framework 的内建验证程序. 使用这些验证程序不需要编程, 只要在一个 XML 文件里对验证程序应该如何工作作出声明就可以了. 需要声明的内容包括: 
+		哪些字段需要进行验证
+		使用什么验证规则
+		在验证失败时应该把什么样的出错消息发送到浏览器端
+	过程式验证：通过编写代码来验证用户输入
+
+声明式验证:
+声明式验证程序可以分为两类:
+	字段验证:  判断某个字段属性的输入是否有效
+	非字段验证:  不只针对某个字段，而是针对多个字段的输入值之间的逻辑关系进行校验。例如：对再次输入密码的判断。
+使用一个声明式验证程序需要 3 个步骤:
+	1. 确定哪些 Action 字段需要验证
+	2. 编写一个验证程序配置文件. 它的文件名必须是以下两种格式之一: 
+		若一个 Action 类的多个 action 使用同样的验证规则: ActionClassName-validation.xml
+		若一个 Action 类的多个 action 使用不同的验证规则: ActionClass-alias-validation.xml, 例如 UserAction-User_create-validation.xml
+	3. 确定验证失败时的响应页面: 在 struts.xml 文件中定义一个 <result name=“input”> 的元素. 
+
+Struts2 内建的验证规则:
+	conversion validator：转换验证器
+	date validator：日期验证器
+	double validator：浮点验证器
+	email validator：email 验证器
+	expression validator：表达式验证器
+	fieldexpression validator：字段表达式验证器
+	int validator：整型验证器
+	regex validator：正则表达式验证器
+	required validator：非空验证器
+	requiredstring validator：非空字符串验证器
+	stringlength validator：字符串长度验证器
+	url validator：url 格式验证器
+	visitor validator：复合属性验证器
+
+
+Struts2 内建的验证程序:
+required: 确保某给定字段的值不是空值 null         “”
+requiredstring: 确保某给定字段的值既不是空值 null, 也不是空白. 
+	trim 参数. 默认为 true, 表示 struts 在验证该字段值之前先剔除前后空格. 
+stringlength: 验证一个非空的字段值是不是有足够的长度. 
+	minLength: 相关字段的最小长度. 若没有给出这个参数, 该字段将没有最小长度限制
+	maxLength:相关字段的最大长度. 若没有给出这个参数, 该字段将没有最大长度限制
+	trim: 在验证之前是否去除前后空格
+date: 确保某给定日期字段的值落在一个给定的范围内
+	max:相关字段的最大值. 若没给出这个参数, 该字段将没有最大值限制
+	min:相关字段的最小值. 若没给出这个参数, 该字段将没有最小值限制
+email: 检查给定 String 值是否是一个合法的 email
+url: 检查给定 String 值是否是一个合法的 url
+regex: 检查某给定字段的值是否与一个给定的正则表达式模式相匹配. 
+	expresssion*: 用来匹配的正则表达式
+	caseSensitive: 是否区分字母的大小写. 默认为 true
+	trim: 是否去除前后空格. 默认为 true
+int: 检查给定整数字段值是否在某一个范围内
+	min: 相关字段的最小值. 若没给出这个参数, 该字段将没有最小值限制
+	max: 相关字段的最大值. 若没给出这个参数, 该字段将没有最大值限制
+conversion: 检查对给定 Action 属性进行的类型转换是否会导致一个转换错误. 该验证程序还可以在默认的类型转换消息的基础上添加一条自定义的消息
+expression 和 fieldexpression: 用来验证给定字段是否满足一个 OGNL 表达式. 
+	前者是一个非字段验证程序, 后者是一个字段验证程序. 
+	前者在验证失败时将生成一个 action 错误, 而后者在验证失败时会生成一个字段错误
+	expression*: 用来进行验证的 OGNL 表达式
+短路验证器:
+<validator  …/> 元素和 <field-validator  …/> 元素可以指定一个可选的 short-circuit 属性，该属性指定该验证器是否是短验证器，默认值为 false。
+对同一个字段内的多个验证器，如果一个短路验证器验证失败，其他验证器不会继续校验
+	<validator type="expression">
+		<param name="expression"><![CDATA[max>min]]></param>
+		<message key="expression.max.min"></message>
+	</validator>
+	
+自定义验证器:
+自定义验证器必须实现 Validator 接口.
+ValidatorSupport 和 FieldValidatorSupport 实现了 Validator 接口
+	若需要普通的验证程序, 可以继承 ValidatorSupport 类
+	若需要字段验证程序, 可以继承 FieldValidatorSupport 类
+	若验证程序需要接受一个输入参数, 需要为这个参数增加一个相应的属性
+注册验证程序: 自定义验证器需要在类路径里的某个 validators.xml 文件里注册:  验证框架首先在根目录下找validators.xml文件,没找到validators.xml文件, 验证框架将调用默认的验证设置,即default.xml里面的配置信息.
+
+
+Struts 对文件上传的支持:
+在 Struts 应用程序里, FileUpload 拦截器和 Jakarta Commons FileUpload 组件可以完成文件的上传. 
+步骤:
+	1. 在 Jsp 页面的文件上传表单里使用 file 标签. 如果需要一次上传多个文件, 就必须使用多个 file 标签, 但它们的名字必须是相同的
+	2. 在 Action 中新添加 3 个和文件上传相关的属性. 这 3 个属性的名字必须是以下格式
+		[File Name] : File -被上传的文件。例如：data
+		[File Name]ContentType : String -上传文件的文件类型。例如：dataContentType
+		[File Name]FileName : String -上传文件的文件名。例如：dataFileName
+	如果上传多个文件, 可以使用 List, 并且在jsp中, 每个文件表单域的name属性要一致
+
+文件下载:
+在某些应用程序里, 可能需要动态地把一个文件发送到用户的浏览器中, 而这个文件的名字和存放位置在编程时是无法预知的
+	Stream 结果类型:
+		Struts 专门为文件下载提供了一种 Stream 结果类型. 在使用一个 Stream 结果时, 不必准备一个 JSP 页面.
+		Stream 结果类型可以设置如下参数: 
+			contentType：被下载的文件的 MIME 类型。默认值为 text/plain
+			contentLength：被下载的文件的大小，以字节为单位
+			contentDisposition： 可以设置下载文件名的ContentDispositon 响应头，默认值为 inline，通常设置为如下格式： attachment;filename="document.pdf".
+			inputName：Action 中提供的文件的输入流。默认值为 inputStream
+			bufferSize：文件下载时缓冲区的大小。默认值为 1024
+			allowCaching ：文件下载时是否允许使用缓存。默认值为 true
+			contentCharSet：文件下载时的字符编码。	
+		Stream 结果类型的参数可以在 Action 以属性的方式覆盖
+	
+表单的重复提交:
+若刷新表单页面, 再提交表单不算重复提交. 
+在不刷新表单页面的前提下: 
+	多次点击提交按钮
+	已经提交成功, 按 "回退" 之后, 再点击 "提交按钮".
+	在控制器响应页面的形式为转发情况下，若已经提交成功, 然后点击 "刷新(F5)“
+重复提交的缺点:
+	加重了服务器的负担
+	可能导致错误操作. 
+Struts解决表单重复提交的方法:
+	Token拦截器.
+	在<s:form>中加入<s:token>, 该标签会在页面中加入一个隐藏域,在session中加入一个隐藏值, 提交表单到Action之后, Token拦截器会取出页面隐藏域的值和session中的值进行比较,
+	如果两者相等, 则执行后续操作,并且把session中的隐藏值删除, 如果再进行表单的重复提交, 此时不会向session中放入隐藏值, 在Action中比较隐藏值就不相等 , 就不会执行后续操作.
+
+Struts 提供的 token 标签可以用来生成一个独一无二的标记. 这个标签必须嵌套在 form 标签的内部使用, 它将在表单里插入一个隐藏字段并把标记值（隐藏域的字段的值）保存在HttpSession 对象里. 
+Token 标签必须与 Token 或 TokenSession 拦截器配合使用, 这两个拦截器都能对标记进行处理. 
+Token 拦截器在遇到重复提交情况时, 会返回 invalid.token 结果并加上一个 Action 错误. 这种错误默认的消息是: The form has already been processed or no token was supplied, please try again.
+TokenSession 拦截器采取的做法只是阻断后续的提交, 用户将看到同样的响应(什么是同样的响应? 提交之后页面该有的样子)，但实际上并没有重复提交
+使用Token拦截器需要配置一个 invalid.token的result,而使用TokenSession不需要配置任何result
+
+Struts2 拦截器:
+	拦截器（Interceptor）是 Struts 2 的核心组成部分。
+	Struts2 很多功能都是构建在拦截器基础之上的，例如文件的上传和下载、国际化、数据类型转换和数据校验等等。
+	Struts2 拦截器在访问某个 Action 方法之前或之后实施拦截 
+	Struts2 拦截器是可插拔的, 拦截器是 AOP（面向切面编程） 的一种实现．
+	拦截器栈(Interceptor Stack): 将拦截器按一定的顺序联结成一条链. 在访问被拦截的方法时, Struts2 拦截器链中的拦截器就会按其之前定义的顺序被依次调用
+	每个拦截器都是实现了com.opensymphony.xwork2.interceptor.Interceptor 接口的 Java 类
+		init: 该方法将在拦截器被创建后立即被调用, 它在拦截器的生命周期内只被调用一次. 可以在该方法中对相关资源进行必要的初始化
+		interecept: 每拦截一个请求, 该方法就会被调用一次. 
+		destroy: 该方法将在拦截器被销毁之前被调用, 它在拦截器的生命周期内也只被调用一次. 
+	Struts 会依次调用为某个 Action 而注册的每一个拦截器的 interecept 方法.
+	每次调用 interecept 方法时, Struts 会传递一个 ActionInvocation 接口的实例. 
+	ActionInvocation: 代表一个给定 Action 的执行状态, 拦截器可以从该类的对象里获得与该 Action 相关联的 Action 对象和 Result 对象. 在完成拦截器自己的任务之后, 拦截器将调用 ActionInvocation 对象的 invoke 方法前进到 Action 处理流程的下一个环节. 
+	AbstractInterceptor 类实现了 Interceptor 接口. 并为 init, destroy 提供了一个空白的实现
+	
+定义自定义拦截器的步骤
+	1.自定义拦截器类
+	2.在 struts.xml 文件中配置自定义的拦截器
+
+Convention 插件:
+	从 Struts 2.1 开始, Struts 可以使用 Convention 插件来支持零配置: 
+	Convention 插件完全抛弃配置信息, 不仅不需要使用 struts.xml 文件进行配置, 甚至不需要使用 Annotation 进行配置. 而是完全根据约定来自动配置.  
+	安装 Conversion 插件: 复制 struts-2.2.1\lib\struts2-convention-plugin-2.2.1.jar 到当前当前 WEB 应用的 WEB-INF 的 lib 目录下. 
+	搜索 Action:
+		搜索 Action: 对于 Convention 插件, 它会自动搜索位于 action, actions, struts, struts2 包下的所有 Java 类, Convention 会把如下两种 Java 类当成 Acition 处理
+			所有实现了 Action 接口的 Java 类
+			所有类名以 Action 结尾的 Java 类
+			下面是符合 Conversion 插件的 Action 类:
+				org.simpleit.actions.LoginAction
+				org.simpleit.actions.book.Books(Books 实现了 Action 接口)
+				org.simpleit.action.LoginAction
+				org.simpleit.struts.action.book.BookAction
+				org.simpleti.struts2.emp.EmployeeAction
+		按约定映射命名空间:
+			找到合适的 Action 类之后, Convention 插件会按约定部署这些 Action, 部署 Action 时, actions, action, struts, struts2 包会被映射为根命名空间, 而这些包下的子包则被映射成对应的命名空间:
+				org.simpleit.actions.LoginAction   /
+				org.simpleit.actions.book.Books(Books 实现了 Action 接口)  /book
+				org.simpleit.action.LoginAction /
+				org.simpleit.struts.action.book.BookAction /action/book
+				org.simpleti.struts2.emp.EmployeeAction /emp
+		按约定映射 Action:
+			Action 的 name 属性(也就是该 Action 所要处理的 URL) 则根据该 Action 的类名映射. 映射 Action 的name 时, 遵循如下规则:
+			若该 Action 类名包含 Action 后缀, 将该 Action 类名的 Action 后缀去掉. 否则不作任何处理
+			将 Action 类名的驼峰写法转成中横线 (-) 写法: 所有字母小写, 单词之间使用 – 隔开. 
+			例子:
+				org.simpleit.actions.LoginAction    /login.action
+				org.simpleit.actions.book.Books(Books 实现了 Action 接口)  /book/books
+				org.simpleit.action.LoginAction  /login.action
+				org.simpleit.struts.action.book.BookAction  /action/book/book.action
+				org.simpleti.struts2.emp.EmployeeAction /emp/employee.action
+		按约定映射 Result:
+			默认情况下, Convention 总会到 WEB 应用的 WEB-INF/content 路径下定位物理资源, 定位资源的约定是: actionUrl + resultCode suffix. 当某个逻辑视图找不到对应的视图资源时, Conversion 会自动试图使用 actionUrl 作为物理资源.
+			例子:
+				org.simpleit.actions.LoginAction    /WEB-INF/content/login.jsp 或 login-success.jsp
+				org.simpleit.actions.book.Books(Books 实现了 Action 接口)  /WEB-INF/content/book/books-success.jsp 或 books.jsp
+				org.simpleit.struts.action.book.BookAction  /WEB-INF/action/book/book-success.jsp 或 book.jsp
+				org.simpleti.struts2.emp.EmployeeAction /WEB-INF/content/emp/employee-success.jsp 或 employee.jsp
+Action 链的约定:
+	如果希望一个 Action 处理结束后不是进入视图页面, 而是进行另一个 Action 形成 Action 链. 通过 Conversion 插件则只需遵守如下三个约定即可.
+		第一个 Action 返回的逻辑视图字符串没有对应的视图资源
+		第二个 Action 与第一个 Action 处于用一个包下
+		第二个 Action 映射的 URL 为: firstActionUrl + resultCode。
+	
+			
