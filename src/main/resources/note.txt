@@ -1,4 +1,20 @@
-Action:
+使用 Filter 作为控制器的好处
+使用一个过滤器来作为控制器, 可以方便地在应用程序里对所有资源(包括静态资源)进行控制访问. 
+
+Servlet和Filter的比较:
+1)Servlet能做的,Filter都可以做
+2)Servlet不擅长拦截资源,Filter 中有一个 FilterChain，这个 API 在 Servlet 中没有
+
+在web.xml中配置struts
+	<filter>
+		<filter-name>struts2</filter-name>
+		<filter-class>org.apache.struts2.dispatcher.filter.StrutsPrepareAndExecuteFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>struts2</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+
 action: 应用程序可以完成的每一个操作. 例如: 显示一个登陆表单; 把产品信息保存起来
 Action类: 普通的 Java 类, 可以有属性和方法, 同时必须遵守下面这些规则: 
 	属性的名字必须遵守与 JavaBeans 属性名相同的命名规则. 属性的类型可以是任意类型. 从字符串到非字符串(基本数据库类型)之间的数据转换可以自动发生
@@ -7,20 +23,102 @@ Action类: 普通的 Java 类, 可以有属性和方法, 同时必须遵守下�
 	同一个 Action 类可以包含多个 action 方法. 
 	Struts2 会为每一个 HTTP 请求创建一个新的 Action 实例
 
-1. 关于值栈:
-1). helloWorld 时, ${productName} 读取 productName 值, 实际上该属性并不在 request 等域对象中, 而是从值栈中获取的. 
-2). ValueStack: 
-I.  可以从 ActionContext 中获取值栈对象
-II. 值栈分为两个逻辑部分
-	> Map 栈: 实际上是 OgnlContext 类型, 是个 Map, 也是对 ActionContext 的一个引用. 里边保存着各种 Map:
-	         requestMap, sessionMap, applicationMap, parametersMap, attr
-	> 对象栈: 实际上是 CompoundRoot 类型, 是一个使用 ArrayList 定义的栈. 里边保存各种和当前 Action 实例相关的对象.
-	                   是一个数据结构意义的栈.
+在 Action 中, 可以通过以下方式访问 web 的 HttpSession, HttpServletRequest, HttpServletResponse等资源:
+1)与Servlet解耦的方式:
+	①通过com.opensymphony.xwork2.ActionContext
+		ActionContext context = ActionContext.getContext();
+		Map<String, Object> applicationMap = context.getApplication();
+		Map<String, Object> sessionMap = (Map<String, Object>) context.get("session");
+		...
+	②通过Action实现如下接口:
+		org.apache.struts2.interceptor.ApplicationAware
+		org.apache.struts2.interceptor.RequestAware
+		org.apache.struts2.interceptor.SessionAware
+		...
+2)与Servlet耦合的方式:
+	①通过 org.apache.struts2.ServletActionContext
+	②通过实现对应的 Servlet*Aware 接口
+ 
+直接访问 Servlet API 将使 Action 与 Servlet 环境耦合在一起,  测试时需要有 Servlet 容器, 不便于对 Action 的单元测试. 
+ 
+com.opensymphony.xwork2.ActionSupport 类是默认的 Action 类. 
+在编写 Action 类时, 通常会对这个类进行扩展
+
+result:
+每个 action 方法都将返回一个 String 类型的值, Struts 将根据这个值来决定响应什么结果.
+每个 action 声明都必须包含有数量足够多的 result 元素, 每个 result 元素分别对应着 action 方法的一个返回值. 
+result 元素可以有下面两个属性
+name: 结果的名字, 必须与 Action 方法的返回值相匹配, 默认值为 success
+type: 响应结果的类型. 默认值为 dispatcher
+	<action name="product-save" class="jayshawn.struts.helloworld.Product" method="save">
+		<!-- 
+		name属性: 默认值为success, 一个result对应一个返回结果, 就是说在method中可以定义多个返回结果, 每个返回结果可以配置一个对应的result
+		type属性:	默认为dispatcher(转发到结果)
+		 -->
+		<result name="result">WEB-INF/pages/details.jsp</result>
+	</action>
+
+结果类型:  dispatcher
+dispatcher 结果类型将把控制权转发给应用程序里的指定资源. 
+dispatcher 结果类型不能把控制权转发给一个外部资源. 若需要把控制权重定向到一个外部资源, 应该使用 redirect 结果类型
+
+结果类型:  redirect
+redirect 结果类型将把响应重定向到另一个资源, 而不是转发给该资源.
+redirect 结果类型接受下面这些参数:
+	location: 用来给出重定向的目的地.它是默认属性
+	parse: 用来表明是否把 location 参数的值视为一个 OGNL 表达式来解释. 默认值为 true
+redirect 结果类型可以把响应重定向到一个外部资源
+
+结果类型:  redirectAction
+redirectAction 结果类型把响应重定向到另一个 Action
+redirectAction 结果类型接受下面这些参数:
+	actionName: 指定 “目的地” action 的名字. 它是默认属性
+	namespace: 用来指定 “目的地” action 的命名空间. 如果没有配置该参数, Struts 会把当前 Action 所在的命名空间作为 “目的地” 的命名空间
+
+结果类型:  chain
+chain 结果类型的基本用途是构成一个 action 链: 前一个 action 把控制权转发给后一个 action, 而前一个 action 的状态在后一个 action 中依然保持
+chain 结果类型接受下面这些参数:
+	actionName: 指定目标 action 的名字. 它是默认属性
+	namespace: 用来指定 “目的地” action 的命名空间. 如果没有配置该参数, Struts 会把当前 action 所在的命名空间作为 “目的地” 的命名空间
+	method: 指定目标 action 方法. 默认值为 execute
+
+通配符映射:
+一个 Web 应用可能有成百上千个 action 声明. 可以利用 struts 提供的通配符映射机制把多个彼此相似的映射关系简化为一个映射关系
+通配符映射规则
+	若找到多个匹配, 没有通配符的那个将胜出
+	若指定的动作不存在, Struts 将会尝试把这个 URI 与任何一个包含着通配符 * 的动作名及进行匹配	
+	被通配符匹配到的 URI 字符串的子串可以用 {1}, {2} 来引用. {1} 匹配第一个子串, {2} 匹配第二个子串…
+	{0} 匹配整个 URI
+	若 Struts 找到的带有通配符的匹配不止一个, 则按先后顺序进行匹配
+	* 可以匹配零个或多个字符, 但不包括 / 字符. 如果想把 / 字符包括在内, 需要使用 **. 如果需要对某个字符进行转义, 需要使用 \.
+	<package  name="app1" namespace="/app1" extends="struts-default" >
+		<!-- 开启正则表达式匹配 -->
+		<global-allowed-methods>regex:.*</global-allowed-methods>
+		<action name="User-*" class="jayshawn.struts.action.App1" method="{1}">
+			<result name="success-{1}">/app1/success.jsp</result>
+		</action>
+	</package>	
+
+
+值栈:
+1). <s:property value=“fieldName”> == ${fieldName}
+	struts包装了页面上的request
+	<%=request.getClass().getName()%>显示的是:
+	org.apache.struts2.dispatcher.StrutsRequestWrapper 
+	该类重写了getAttribute()方法
+	helloWorld 时, ${productName} 读取 productName 值, 实际上该属性并不在 request 等域对象中, 而是从值栈中获取的. 
+2). 在 ValueStack 对象的内部有两个逻辑部分:
+	①ObjectStack: Struts  把 Action 和相关对象压入 ObjectStack 中
+	②ContextMap: Struts 把各种各样的映射关系(一些 Map 类型的对象) 压入 ContextMap 中.  实际上就是对 ActionContext 的一个引用
+	Struts 会把下面这些映射压入 ContextMap 中
+		parameters: 该 Map 中包含当前请求的请求参数
+		request: 该 Map 中包含当前 request 对象中的所有属性
+		session: 该 Map 中包含当前 session 对象中的所有属性
+		application:该 Map 中包含当前 application  对象中的所有属性
+		attr: 该 Map 按如下顺序来检索某个属性: request, session, application
+
  2. Struts2 利用 s:property 标签和 OGNL 表达式来读取值栈中的属性值
- 1). 值栈中的属性值:
- 	> 对于对象栈: 对象栈中某一个对象的属性值
- 	> Map 栈: request, session, application 的一个属性值 或 一个请求参数的值. 
- 2). 读取对象栈中对象的属性:
+	1)读取对象栈中对象的属性:
  	> 若想访问 Object Stack 里的某个对象的属性. 可以使用以下几种形式之一: 
 	  object.propertyName ; object['propertyName'] ; object["propertyName"]	
 	> ObjectStack 里的对象可以通过一个从零开始的下标来引用. ObjectStack 里的栈顶对象可以用 [0] 来引用, 
@@ -29,35 +127,120 @@ II. 值栈分为两个逻辑部分
 	> [n] 的含义是从第 n 个开始搜索, 而不是只搜索第 n 个对象
 	> 若从栈顶对象开始搜索, 则可以省略下标部分: message 
 	> 结合 s:property 标签: <s:property value="[0].message" />  <s:property value="message" />
- 3). 默认情况下, Action 对象会被 Struts2 自动的放到值栈的栈顶. 
- 4). 取 Context Map 里的对象的属性:
+	2)默认情况下, Action 对象会被 Struts2 自动的放到值栈的栈顶. 
+	3)取 Context Map 里的对象的属性:
 	 若想访问 ContextMap 里的某个对象的属性, 可以使用以下几种形式之一: 
 		返回 session 中的 code 属性: #session.code
 		返回 request 中的 customer 属性的 name 属性值: #request.customer.name
 		返回域对象(按 request, session, application 的顺序)的 lastAccessDate 属性: #attr.lastAccessDate
-5). 调用字段和方法
+	4)调用字段和方法
 	可以利用 OGNL 调用
-		任何一个 Java 类里的静态字段或方法.
-		被压入到 ValueStack 栈的对象上的公共字段和方法. 
-	默认情况下, Struts2 不允许调用任意 Java 类静态方法,  需要重新设置 struts.ognl.allowStaticMethodAccess 标记变量的值为 true. 
-	调用静态字段或方法需要使用如下所示的语法:
-		@fullyQualifiedClassName@fieldName: @java.util.Calendar@DECEMBER
-		@fullyQualifiedClassName@methodName(argumentList): @app4.Util@now()
-	调用一个实例字段或方法的语法, 其中 object 是 Object Stack 栈里的某个对象的引用:
-		object.fieldName: [0].datePattern
-		object.methodName(argumentList): [0].repeat(3, “Hello”);
-	
+		①任何一个 Java 类里的静态字段或方法.
+			默认情况下, Struts2 不允许调用任意 Java 类静态方法,  需要重新设置 struts.ognl.allowStaticMethodAccess 标记变量的值为 true. 
+			@全类名@字段名: @java.util.Calendar@DECEMBER
+			@全类名@方法名(参数列表): @app4.Util@now()
+		②被压入到 ValueStack 栈的对象上的公共字段和方法. 
+			object.fieldName: [0].datePattern
+			object.methodName(argumentList): [0].repeat(3, “Hello”);
 
-注意:在jsp页面导入s标签：<%@ taglib uri="/struts-tags" prefix="s" %>
-注意:<s:debug></s:debug> 可以在页面显示valuestack的具体内容
-注意:"%{}"中的内容会强制进行OGNL解析
+访问数组类型的属性:
+可以使用下标访问数组中指定的元素: colors[0]
+可以通过调用其 length 字段查出给定数组中有多少个元素: colors.length
+
+访问 List 类型的属性:
+可以使用下标访问 List 中指定的元素: colors[0]
+可以通过调用其 size 方法或专用关键字 size 的方法查出给定List 的长度: colors.size 或 colors.size()
+可以通过使用 isEmpty() 方法或专用关键字 isEmpty 来得知给定的 List 是不是空. colors.isEmpty 或 colors.isEmpty()
+还可以使用 OGNL 表达式来创建 List, 创建一个 List 与声明一个 Java 数组是相同的: {“Red”, “Black”, “Green”}
+
+访问 Map 类型的属性:
+若希望检索出某个 Map 的值, 需要使用如下格式: map[key] 
+可以使用 size 或 size() 得出某个给定的 Map 的键值对的个数
+可以使用 isEmpty 或 isEmpty() 检查某给定 Map 是不是空. 
+	
+❤注意:
+在jsp页面使用struts,需要导入s标签：<%@ taglib uri="/struts-tags" prefix="s" %>
+<s:debug></s:debug> 可以在页面显示值栈中的具体内容
+" %{} " 中的内容会强制进行OGNL解析
+
+异常处理: exception-mapping 元素
+exception-mapping 元素: 配置当前 action 的声明式异常处理
+exception-mapping 元素中有 2 个属性
+	exception: 指定需要捕获的的异常类型。异常的全类名
+	result: 指定一个响应结果, 该结果将在捕获到指定异常时被执行, 既可以来自当前 action 的声明, 也可以来自 global-results 声明. 
+可以通过 global-exception-mappings 元素为应用程序提供一个全局性的异常捕获映射. 但在 global-exception-mappings 元素下声明的任何 exception-mapping 元素只能引用在 global-results 元素下声明的某个 result 元素
+声明式异常处理机制由  ExceptionMappingInterceptor 拦截器负责处理, 当某个 exception-mapping 元素声明的异常被捕获到时, ExceptionMappingInterceptor 拦截器就会向 ValueStack 中添加两个对象: 
+	exception: 表示被捕获异常的 Exception 对象
+	exceptionStack: 包含着被捕获异常的栈
+可以在视图上通过 <s:property> 标签显示异常消息
+
+通用标签:
+1)	param 标签用来把一个参数传递给包含着它的那个标签
+	<s:param name="" value=""></s:param>
+	name: 传递给外层标签的参数的名字
+	value: 传递给外层标签的参数的值
+	无论在给出 value 值时有没有使用 %{}, Struts 都会对它进行 ognl 求值
+	如果想传递一个 String 类型的字符串作为参数值, 必须把它用单引号括起来. 
+	可以把 value 属性的值写在开始标签和结束标签之间. 利用这种方式来传递一个 EL 表达式的值
+2)	set 标签用于在application, session, request, page中创建一个键值对
+	<s:set var="" scope="request" value=""></s:set>
+	var:键
+	value:值
+	scope:目标变量的作用范围, 取值可选application, session, request, page, default
+3)	push 标签的功能和 set 标签类似.
+	push 标签在标签起始时把一个对象压入栈, ❤标签结束时将对象弹出栈.
+4)	*if, else 和 elseif 这三个标签用来进行条件测试, 它们的用途和用法类似于 if, else 和 elseif 关键字. 其中 if 和 elseif 必须有 test 属性
+5)	iterator 标签
+	<s:iterator var="" value=""></s:iterator>
+	value:被遍历对象
+	var:辅助变量名
+	用来遍历一个Array, Collection 或一个 Map, 并把这个可遍历对象里的每一个元素❤依次压入和弹出值栈❤
+6)	sort 标签用来对一个可遍历对象里的元素进行排序. 
+	<s:sort comparator="" source="" var=""></s:sort>
+	comparator:比较器
+	source:源对象
+	var:排序之后对象
+7)	date 标签用来对 Date 对象进行排版
+	<s:date name="#attr.date" format="yyyy-MM-dd hh:ss:mm" var="date" />
+	date:${date }
+	name:被排版的Date对象
+	format:排版格式
+	var: 被压入值栈的变量名
+8)	a 标签将呈现为一个 HTML 连接. 这个标签可以接受 HTML 语言中的 a 元素所能接受的所有属性. 
+9)	url 标签用来动态地创建一个 URL
+10)	action 标签用在页面上来执行一个 action. 
+	action 标签还会把当前 Action 对象压入 ValueStack 值栈的 ContextMap 子栈. 
+11)	bean 标签将创建一个 JavaBean, 并把它压入 ValueStack 值栈的 ContextMap 子栈. 这个标签的功能与 JSP 中的 useBean 动作元素很相似
+12)	include 标签用来把一个 Servlet 或 JSP 页面的输出包含到当前页面里来. 
+
 
 struts表单标签:
 	1.会自动进行回显:从值栈栈顶获取匹配的属性值填到表单对应的value中.在做修改时可以利用这个特性, 比如一个用户需要
 		修改自己的信息, 在进入修改页面之前, 可以在Action方法中把用户对象push到值栈中,然后进入修改页面时, struts
 		框架会自动从值栈中获取对应属性填到对应的表单域中.
 	2.会自动生成table进行排版
-	
+
+form 标签用来呈现 HTML 语言中的表单元素
+	1)textfield 标签将被呈现为一个输入文本字段
+	2)password 标签将被呈现为一个口令字段
+		password 标签扩展自 textfield 标签, 多了一个 showPassword 属性. 该属性时布尔型. 默认值为 false, 它决定着在表单回显时是否显示输入的密码. 
+	3)hidden 标签将被呈现为一个不可见字段
+	4)textarea 标签将呈现为一个 HTML 文本域元素
+	5)checkbox 标签将呈现为一个 HTML 单选框元素. 该单选框元素通常用于提交一个布尔值
+		传统的html页面中,当包含着一个单选框的表单被提交时, 如果某个单选框被选中了, 它的值将为 true, 这个单选框在 HTTP 请求里增加一个请求参数.但如果该单选框未被选中, 在请求中就不会增加一个请求参数. 
+		checkbox 标签解决了这个局限性, 它采取的办法是为单个单选框元素创建一个配对的不可见字段, 及时单选框未被选中也会提交一个false
+	6)radio 标签将呈现为一组单选按钮, 单选按钮的个数与程序员通过该标签的 list 属性提供的选项的个数相同.
+		一般地, 使用 radio 标签实现 “多选一”, 对于 “真/假” 则该使用 checkbox 标签. 
+		<s:radio list="#attr.map" name="radio"></s:radio>
+	7)select 标签将呈现一个 select 元素. 
+		<s:select list="#attr.map" name="select"></s:select>
+	8)checkboxlist 标签将呈现一组多选框.
+		checkbox 标签被映射到一个字符串数组或是一个基本类型的数组. 若它提供的多选框一个也没有被选中, 相应的属性将被赋值为一个空数组而不是空值. 
+		<s:checkboxlist list="#attr.map" name="checkboxlist"></s:checkboxlist>
+	❤注意: radio, select, checkboxlist 标签都有3个属性 list, listKey, listValue,
+		可以把Array, Enumeration, Iterator, Map 或 Collection 赋给 list 属性
+		当把一个对象集合赋值给list时,需要把用来提供value的对象属性赋给 listKey 属性, 把用来提供label的对象属性赋给 listValue 属性
+
 主题: 为了让所有的 UI 标签能够产生同样的视觉效果而归集到一起的一组模板. 即风格相近的模板被打包为一个主题
 	simple: 把 UI 标签翻译成最简单的 HTML 对应元素, 而且会忽视行标属性
 	xhtml: xhtml 是默认的主题. 这个主题的模板通过使用一个布局表格提供了一种自动化的排版机制. 
@@ -111,61 +294,34 @@ I.   先为 EmployeeAction 的 employeeId 赋值
 II.  根据 employeeId 从数据库中加载对应的对象, 并放入到值栈的栈顶
 III. 再为栈顶对象的 employeeId 赋值(实际上此时 employeeId 属性值已经存在)
 IV.  把栈顶对象的属性回显在表单中.
-4). 关于回显: Struts2 表单标签会从值栈中获取对应的属性值进行回显. 
-5). 存在的问题: 
-getModel 方法
-public Employee getModel() {
-	if(employeeId == null)
-		employee = new Employee();
-	else
-		employee = dao.get(employeeId);
-	
-	return employee;
-}
-I.   在执行删除的时候, employeeId 不为 null, 但 getModel 方法却从数据库加载了一个对象. 不该加载!
-II.  指向查询全部信息时, 也 new Employee() 对象. 浪费!
-6). 解决方案: 使用 PrepareInterceptor 和 Preparable 接口. 
-7). 关于 PrepareInterceptor
-[分析后得到的结论]
-若 Action 实现了 Preparable 接口, 则 Struts 将尝试执行 prepare[ActionMethodName] 方法,
-若 prepare[ActionMethodName] 不存在, 则将尝试执行 prepareDo[ActionMethodName] 方法.
-若都不存在, 就都不执行.
-若 PrepareInterceptor  的 alwaysInvokePrepare 属性为 false, 
-则 Struts2 将不会调用实现了 Preparable 接口的  Action 的 prepare() 方法
-[能解决 5) 的问题的方案]
-可以为每一个 ActionMethod 准备 prepare[ActionMethdName] 方法, 而抛弃掉原来的 prepare() 方法
-将 PrepareInterceptor  的 alwaysInvokePrepare 属性置为 false, 以避免 Struts2 框架再调用 prepare() 方法.
-如何在配置文件中为拦截器栈的属性赋值: 参看 /struts-2.3.15.3/docs/WW/docs/interceptors.html
-<interceptors>
-    <interceptor-stack name="parentStack">
-        <interceptor-ref name="defaultStack">
-            <param name="params.excludeParams">token</param>
-        </interceptor-ref>
-    </interceptor-stack>
-</interceptors>
-<default-interceptor-ref name="parentStack"/>
 
 
 类型转换:
 从一个 HTML 表单到一个 Action 对象, 类型转换是从字符串到非字符串. 
 HTTP 没有 “类型” 的概念. 每一项表单输入只可能是一个字符串或一个字符串数组. 在服务器端, 必须把 String 转换为特定的数据类型
 在 struts2 中, 把请求参数映射到 action  属性的工作由 Parameters 拦截器负责, 它是默认的 defaultStack 拦截器中的一员. Parameters 拦截器可以自动完成字符串和基本数据类型之间转换. 
+
 类型转换错误:
 如果类型转换失败:
 若 Action 类没有实现 ValidationAware 接口： Struts 在遇到类型转换错误时仍会继续调用其 Action 方法, 就好像什么都没发生一样.
 若 Action 类实现 ValidationAware 接口：Struts 在遇到类型转换错误时将不会继续调用其 Action 方法:  Struts 将检查相关 action 元素的声明是否包含着一个 name=input 的 result.  如果有, Struts 将把控制权转交给那个 result  元素; 若没有 input 结果, Struts 将抛出一个异常
+
 类型转换错误消息的定制:
 作为默认的 default 拦截器的一员, ConversionError 拦截器负责添加与类型转换有关的出错消息(前提: Action 类必须实现了 ValidationAware 接口)和保存各请求参数的原始值.   
 显示错误消息: 如果是 simple 主题, 可以通过 <s:fielderror fieldName=“filedname”></s:fielderror> 标签显示错误消息
+
 定制类型转换器:
 自定义类型转换器必须实现 ongl.TypeConverter 接口或对这个接口的某种具体实现做扩展,通常情况下是扩展 StrutsTypeConverter 类.
+
 配置自定义的类型转换器:
 在应用程序里使用一个自定义的类型转换器之前, 必须先对它进行配置. 这种配置既可以基于字段, 也可以基于类型
+
 基于字段配置: 可以为某个 Model（该 Model 类也可能是 Action） 的各个属性分别配置一个自定义的转换器. 
 1. 创建一个属性文件: ModelClassName-conversion.properties, 该文件需和相对应的 Model 类放在同一个目录下
 2. 编辑属性文件: 
 	field1 = customConvert1
 	field2 = customConvert2
+
 基于类型配置: 
 在 WEB-INF/classes/ 目录下创建 xwork-conversion.properties 文件. 
 在 xwork-conversion.properties 文件里把每一个需要进行类型转换的类与一个类型转换器关联起来:
@@ -175,14 +331,18 @@ HTTP 没有 “类型” 的概念. 每一项表单输入只可能是一个字�
 	form 标签的 name 属性可以被映射到一个属性的属性. 
 
 配置国际化资源文件:
+
 Action 范围资源文件：在Action类文件所在的路径建立名为ActionName_language_country.properties 的文件
+
 包范围资源文件：在包的根路径下建立文件名为package_language_country.properties 的属性文件，一旦建立，处于该包下的所有 Action 都可以访问该资源文件。注意：包范围资源文件的 baseName 就是package，不是Action所在的包名。
+
 全局资源文件
 	命名方式: basename_language_country.properties
 	struts.xml
 		<constant name="struts.custom.i18n.resources" value="baseName"/>
 	struts.properties
 		struts.custom.i18n.resources=baseName
+
 临时指定资源文件：<s:i18n.../> 标签的 name 属性指定临时的国际化资源文件
  
 访问国际化消息:
@@ -218,7 +378,6 @@ Struts2 的输入验证
 		哪些字段需要进行验证
 		使用什么验证规则
 		在验证失败时应该把什么样的出错消息发送到浏览器端
-	过程式验证：通过编写代码来验证用户输入
 
 声明式验证:
 声明式验证程序可以分为两类:
@@ -248,7 +407,7 @@ Struts2 内建的验证规则:
 
 
 Struts2 内建的验证程序:
-required: 确保某给定字段的值不是空值 null         “”
+required: 确保某给定字段的值不是空值 null
 requiredstring: 确保某给定字段的值既不是空值 null, 也不是空白. 
 	trim 参数. 默认为 true, 表示 struts 在验证该字段值之前先剔除前后空格. 
 stringlength: 验证一个非空的字段值是不是有足够的长度. 
@@ -267,11 +426,26 @@ regex: 检查某给定字段的值是否与一个给定的正则表达式模式�
 int: 检查给定整数字段值是否在某一个范围内
 	min: 相关字段的最小值. 若没给出这个参数, 该字段将没有最小值限制
 	max: 相关字段的最大值. 若没给出这个参数, 该字段将没有最大值限制
+	例子:
+		<!DOCTYPE validators PUBLIC "-//Apache Struts//XWork Validator 1.0.3//EN"
+		        "http://struts.apache.org/dtds/xwork-validator-1.0.3.dtd">
+		<validators>
+			<field name="age">
+				<field-validator type="int">
+					<param name="min">20</param>
+					<param name="max">50</param>
+					<message>age不合法</message>
+				</field-validator>
+			</field>
+		</validators>
 conversion: 检查对给定 Action 属性进行的类型转换是否会导致一个转换错误. 该验证程序还可以在默认的类型转换消息的基础上添加一条自定义的消息
 expression 和 fieldexpression: 用来验证给定字段是否满足一个 OGNL 表达式. 
 	前者是一个非字段验证程序, 后者是一个字段验证程序. 
 	前者在验证失败时将生成一个 action 错误, 而后者在验证失败时会生成一个字段错误
-	expression*: 用来进行验证的 OGNL 表达式
+	例子:
+	<validator type="expression">
+		<param name="expression"><![CDATA[password==repassword]]></param>
+	</validator>
 短路验证器:
 <validator  …/> 元素和 <field-validator  …/> 元素可以指定一个可选的 short-circuit 属性，该属性指定该验证器是否是短验证器，默认值为 false。
 对同一个字段内的多个验证器，如果一个短路验证器验证失败，其他验证器不会继续校验
@@ -290,6 +464,8 @@ ValidatorSupport 和 FieldValidatorSupport 实现了 Validator 接口
 
 
 Struts 对文件上传的支持:
+须把 HTML 表单的 enctype 属性设置为 multipart/form-data
+须把 HTML 表单的method 属性设置为 post
 在 Struts 应用程序里, FileUpload 拦截器和 Jakarta Commons FileUpload 组件可以完成文件的上传. 
 步骤:
 	1. 在 Jsp 页面的文件上传表单里使用 file 标签. 如果需要一次上传多个文件, 就必须使用多个 file 标签, 但它们的名字必须是相同的
@@ -339,6 +515,8 @@ Struts2 拦截器:
 	Struts2 拦截器在访问某个 Action 方法之前或之后实施拦截 
 	Struts2 拦截器是可插拔的, 拦截器是 AOP（面向切面编程） 的一种实现．
 	拦截器栈(Interceptor Stack): 将拦截器按一定的顺序联结成一条链. 在访问被拦截的方法时, Struts2 拦截器链中的拦截器就会按其之前定义的顺序被依次调用
+
+Interceptor接口:	
 	每个拦截器都是实现了com.opensymphony.xwork2.interceptor.Interceptor 接口的 Java 类
 		init: 该方法将在拦截器被创建后立即被调用, 它在拦截器的生命周期内只被调用一次. 可以在该方法中对相关资源进行必要的初始化
 		interecept: 每拦截一个请求, 该方法就会被调用一次. 
@@ -351,49 +529,3 @@ Struts2 拦截器:
 定义自定义拦截器的步骤
 	1.自定义拦截器类
 	2.在 struts.xml 文件中配置自定义的拦截器
-
-Convention 插件:
-	从 Struts 2.1 开始, Struts 可以使用 Convention 插件来支持零配置: 
-	Convention 插件完全抛弃配置信息, 不仅不需要使用 struts.xml 文件进行配置, 甚至不需要使用 Annotation 进行配置. 而是完全根据约定来自动配置.  
-	安装 Conversion 插件: 复制 struts-2.2.1\lib\struts2-convention-plugin-2.2.1.jar 到当前当前 WEB 应用的 WEB-INF 的 lib 目录下. 
-	搜索 Action:
-		搜索 Action: 对于 Convention 插件, 它会自动搜索位于 action, actions, struts, struts2 包下的所有 Java 类, Convention 会把如下两种 Java 类当成 Acition 处理
-			所有实现了 Action 接口的 Java 类
-			所有类名以 Action 结尾的 Java 类
-			下面是符合 Conversion 插件的 Action 类:
-				org.simpleit.actions.LoginAction
-				org.simpleit.actions.book.Books(Books 实现了 Action 接口)
-				org.simpleit.action.LoginAction
-				org.simpleit.struts.action.book.BookAction
-				org.simpleti.struts2.emp.EmployeeAction
-		按约定映射命名空间:
-			找到合适的 Action 类之后, Convention 插件会按约定部署这些 Action, 部署 Action 时, actions, action, struts, struts2 包会被映射为根命名空间, 而这些包下的子包则被映射成对应的命名空间:
-				org.simpleit.actions.LoginAction   /
-				org.simpleit.actions.book.Books(Books 实现了 Action 接口)  /book
-				org.simpleit.action.LoginAction /
-				org.simpleit.struts.action.book.BookAction /action/book
-				org.simpleti.struts2.emp.EmployeeAction /emp
-		按约定映射 Action:
-			Action 的 name 属性(也就是该 Action 所要处理的 URL) 则根据该 Action 的类名映射. 映射 Action 的name 时, 遵循如下规则:
-			若该 Action 类名包含 Action 后缀, 将该 Action 类名的 Action 后缀去掉. 否则不作任何处理
-			将 Action 类名的驼峰写法转成中横线 (-) 写法: 所有字母小写, 单词之间使用 – 隔开. 
-			例子:
-				org.simpleit.actions.LoginAction    /login.action
-				org.simpleit.actions.book.Books(Books 实现了 Action 接口)  /book/books
-				org.simpleit.action.LoginAction  /login.action
-				org.simpleit.struts.action.book.BookAction  /action/book/book.action
-				org.simpleti.struts2.emp.EmployeeAction /emp/employee.action
-		按约定映射 Result:
-			默认情况下, Convention 总会到 WEB 应用的 WEB-INF/content 路径下定位物理资源, 定位资源的约定是: actionUrl + resultCode suffix. 当某个逻辑视图找不到对应的视图资源时, Conversion 会自动试图使用 actionUrl 作为物理资源.
-			例子:
-				org.simpleit.actions.LoginAction    /WEB-INF/content/login.jsp 或 login-success.jsp
-				org.simpleit.actions.book.Books(Books 实现了 Action 接口)  /WEB-INF/content/book/books-success.jsp 或 books.jsp
-				org.simpleit.struts.action.book.BookAction  /WEB-INF/action/book/book-success.jsp 或 book.jsp
-				org.simpleti.struts2.emp.EmployeeAction /WEB-INF/content/emp/employee-success.jsp 或 employee.jsp
-Action 链的约定:
-	如果希望一个 Action 处理结束后不是进入视图页面, 而是进行另一个 Action 形成 Action 链. 通过 Conversion 插件则只需遵守如下三个约定即可.
-		第一个 Action 返回的逻辑视图字符串没有对应的视图资源
-		第二个 Action 与第一个 Action 处于用一个包下
-		第二个 Action 映射的 URL 为: firstActionUrl + resultCode。
-	
-			

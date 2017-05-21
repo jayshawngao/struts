@@ -96,6 +96,7 @@
 	</package>
 	
 	<package name="load" namespace="/load" extends="struts-default">
+		
 		<action name="upload" class="jayshawn.struts.load.UploadAction">
 			<result>/success.jsp</result>
 		</action>

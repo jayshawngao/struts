@@ -11,5 +11,7 @@
 	productName: ${productName}
 	<br><br>
 	productPrice: ${productPrice}
+	<br><br>
+	<%=request.getClass().getName()%>
 </body>
 </html>
