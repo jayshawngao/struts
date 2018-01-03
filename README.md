@@ -9,5 +9,5 @@ Struts是一个用来开发MVC应用程序的框架, 它提供了Web应用程序
 - 表单的重复提交  
 - 文件的上传下载  
 
-eclipse插件:StrutsClipse
+eclipse插件: StrutsClipse
 
